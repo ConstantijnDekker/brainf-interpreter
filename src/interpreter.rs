@@ -7,7 +7,6 @@ struct ProgramState {
     data: [u8; DATA_SIZE],
     instr_ptr: usize,
     loop_stack: Vec<usize>,
-    on: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,44 +33,7 @@ impl ProgramState {
             data: [0; DATA_SIZE],
             instr_ptr: 0,
             loop_stack: Vec::new(),
-            on: true,
         }
-    }
-
-    fn execute(&mut self, instr: Instruction) {
-        match instr {
-            Instruction::IncData => {
-                self.data[self.data_ptr] = self.data[self.data_ptr].wrapping_add(1);
-            }
-            Instruction::DecData => {
-                self.data[self.data_ptr] = self.data[self.data_ptr].wrapping_sub(1);
-            }
-            Instruction::IncDataPtr => {
-                self.data_ptr = self.data_ptr.wrapping_add(1);
-            }
-            Instruction::DecDataPtr => {
-                self.data_ptr = self.data_ptr.wrapping_sub(1);
-            }
-            Instruction::Output => print!("{}", self.data[self.data_ptr] as char),
-            Instruction::Input => {
-                self.data[self.data_ptr] = std::io::stdin()
-                    .bytes()
-                    .next()
-                    .expect("No more bytes in input.")
-                    .expect("Error reading byte from input.");
-            },
-            Instruction::WhileNonZero => {
-                if self.data[self.data_ptr] == 0 {
-                    self.on = false;
-                } else {
-                    self.loop_stack.push(self.instr_ptr);
-                }
-            }
-            Instruction::EndWhile => {
-                let loop_entry = self.loop_stack.pop().unwrap();
-                self.instr_ptr = loop_entry;
-            }
-        };
     }
 }
 
@@ -89,16 +51,20 @@ fn to_instruction(ch: char) -> Option<Instruction> {
     }
 }
 
-fn find_match(instructions: Vec<Instruction>, mut instr_ptr: usize) -> usize {
-    let x = 1;
-    while x > 0 {
-        if instructions[instr_ptr] == Instruction::WhileNonZero {
-            x += 1;
-        } else if instructions[instr_ptr] == Instruction::EndWhile {
-            x -= 1;
+fn skip_from(remaining: &[Instruction]) -> usize {
+    let mut nest_level = 1;
+    let mut advance = 1;
+
+    while nest_level > 0 {
+        if remaining[advance] == Instruction::EndWhile {
+            nest_level -= 1;
+        } else if remaining[advance] == Instruction::WhileNonZero {
+            nest_level += 1;
         }
-        instr_ptr += 1;
+        advance += 1;
     }
+
+    advance
 }
 
 impl Program {
@@ -111,15 +77,49 @@ impl Program {
     pub fn execute(&self) {
         let mut state = ProgramState::new();
 
-        loop {
-            let instr = self.instructions[state.instr_ptr];
-            if state.on {
-                state.execute(instr);
-            } else {
-                state.instr_ptr = find_match(self.instructions, state.instr_ptr);
-                state.on = true;
-            }
-            state.instr_ptr += 1;
+        while state.instr_ptr < self.instructions.len() {
+            let instruction = self.instructions[state.instr_ptr];
+            match instruction {
+                Instruction::IncData => {
+                    state.data[state.data_ptr] = state.data[state.data_ptr].wrapping_add(1);
+                    state.instr_ptr += 1;
+                }
+                Instruction::DecData => {
+                    state.data[state.data_ptr] = state.data[state.data_ptr].wrapping_sub(1);
+                    state.instr_ptr += 1;
+                }
+                Instruction::IncDataPtr => {
+                    state.data_ptr += 1;
+                    state.instr_ptr += 1;
+                }
+                Instruction::DecDataPtr => {
+                    state.data_ptr -= 1;
+                    state.instr_ptr += 1;
+                }
+                Instruction::Output => {
+                    print!("{}", state.data[state.data_ptr] as char);
+                    state.instr_ptr += 1;
+                }
+                Instruction::Input => {
+                    state.data[state.data_ptr] = std::io::stdin()
+                        .bytes()
+                        .next()
+                        .expect("No more bytes in input.")
+                        .expect("Error reading byte from input.");
+                },
+                Instruction::WhileNonZero => {
+                    if state.data[state.data_ptr] == 0 {
+                        state.instr_ptr += skip_from(&self.instructions[state.instr_ptr..]);
+                    } else {
+                        state.loop_stack.push(state.instr_ptr);
+                        state.instr_ptr += 1;
+                    }
+                }
+                Instruction::EndWhile => {
+                    let loop_entry = state.loop_stack.pop().unwrap();
+                    state.instr_ptr = loop_entry;
+                }
+            };
         }
     }
 }
