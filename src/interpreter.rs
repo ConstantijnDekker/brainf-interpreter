@@ -35,8 +35,6 @@ impl ProgramState {
             loop_stack: Vec::new(),
         }
     }
-
-
 }
 
 fn to_instruction(ch: char) -> Option<Instruction> {
