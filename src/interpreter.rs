@@ -55,6 +55,7 @@ fn skip_from(remaining: &[Instruction]) -> usize {
     let mut nest_level = 1;
     let mut advance = 1;
 
+    // Index out of bounds if no matching EndWhile can be found.
     while nest_level > 0 {
         if remaining[advance] == Instruction::EndWhile {
             nest_level -= 1;
@@ -116,10 +117,12 @@ impl Program {
                     }
                 }
                 Instruction::EndWhile => {
+                    // Index out of bounds if no matching "WhileNonZero" exists.
                     let loop_entry = state.loop_stack.pop().unwrap();
                     state.instr_ptr = loop_entry;
                 }
             };
         }
+        // perhaps assert the loop stack is empty
     }
 }
