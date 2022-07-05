@@ -35,6 +35,8 @@ impl ProgramState {
             loop_stack: Vec::new(),
         }
     }
+
+
 }
 
 fn to_instruction(ch: char) -> Option<Instruction> {
@@ -51,20 +53,20 @@ fn to_instruction(ch: char) -> Option<Instruction> {
     }
 }
 
+// Skip instructions until closing EndWhile is found.
+// Return number of instructions skipped.
 fn skip_from(remaining: &[Instruction]) -> usize {
     let mut nest_level = 1;
     let mut advance = 1;
 
-    // Index out of bounds if no matching EndWhile can be found.
     while nest_level > 0 {
-        if remaining[advance] == Instruction::EndWhile {
-            nest_level -= 1;
-        } else if remaining[advance] == Instruction::WhileNonZero {
+        if remaining[advance] == Instruction::WhileNonZero {
             nest_level += 1;
+        } else if remaining[advance] == Instruction::EndWhile {
+            nest_level -= 1;
         }
         advance += 1;
     }
-
     advance
 }
 
@@ -75,12 +77,31 @@ impl Program {
         }
     }
 
+    pub fn is_balanced(&self) -> bool {
+        let mut nest_level: i32 = 0;
+        for &instr in &self.instructions {
+            if instr == Instruction::WhileNonZero {
+                nest_level += 1;
+            } else if instr == Instruction::EndWhile {
+                nest_level -= 1;
+            }
+            if nest_level < 0 {
+                return false;
+            }
+        }
+        nest_level == 0
+    }
+
     pub fn execute(&self) {
+        if !self.is_balanced() {
+            println!("Error: imbalanced brackets. Aborting execution.");
+            return;
+        }
         let mut state = ProgramState::new();
 
         while state.instr_ptr < self.instructions.len() {
-            let instruction = self.instructions[state.instr_ptr];
-            match instruction {
+            let instr = self.instructions[state.instr_ptr];
+            match instr {
                 Instruction::IncData => {
                     state.data[state.data_ptr] = state.data[state.data_ptr].wrapping_add(1);
                     state.instr_ptr += 1;
@@ -117,12 +138,10 @@ impl Program {
                     }
                 }
                 Instruction::EndWhile => {
-                    // Index out of bounds if no matching "WhileNonZero" exists.
                     let loop_entry = state.loop_stack.pop().unwrap();
                     state.instr_ptr = loop_entry;
                 }
             };
         }
-        // perhaps assert the loop stack is empty
     }
 }
